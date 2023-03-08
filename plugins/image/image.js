@@ -56,6 +56,8 @@ KindEditor.plugin('image', function(K) {
 			lang.width + ' <input type="text" id="remoteWidth" class="ke-input-text ke-input-number" name="width" value="" maxlength="4" /> ',
 			lang.height + ' <input type="text" class="ke-input-text ke-input-number" name="height" value="" maxlength="4" /> ',
 			'<img class="ke-refresh-btn" src="' + imgPath + 'refresh.png" width="16" height="16" alt="" style="cursor:pointer;" title="' + lang.resetSize + '" />',
+			'&nbsp;&nbsp;<img class="ke-max-width-btn" src="' + imgPath + 'max-width.png" width="16" height="16" alt="" style="cursor:pointer;" title="宽100%高自适应" />',
+			'&nbsp;&nbsp;<img class="ke-auto-size-btn" src="' + imgPath + 'auto.png" width="16" height="16" alt="" style="cursor:pointer;" title="不设置宽高" />',
 			'</div>',
 			//align
 			'<div class="ke-dialog-row">',
@@ -68,6 +70,11 @@ KindEditor.plugin('image', function(K) {
 			'<div class="ke-dialog-row">',
 			'<label for="remoteTitle" style="width:60px;">' + lang.imgTitle + '</label>',
 			'<input type="text" id="remoteTitle" class="ke-input-text" name="title" value="" style="width:200px;" />',
+			'</div>',
+			'<div class="ke-dialog-row">',
+			'<span class="ke-button-common ke-button-outer">',
+            '<input type="button" class="ke-button-common ke-button" name="selectImage" value="' + lang.selectImage + '" />',
+			'</span>',
 			'</div>',
 			'</div>',
 			//remote image - end
@@ -130,12 +137,12 @@ KindEditor.plugin('image', function(K) {
 						urlBox[0].focus();
 						return;
 					}
-					if (!/^\d*$/.test(width)) {
+					if ((!/^\d*%?$/.test(width)) && (width != 'auto') && (width != '100%') && (width != '')) {
 						alert(self.lang('invalidWidth'));
 						widthBox[0].focus();
 						return;
 					}
-					if (!/^\d*$/.test(height)) {
+					if ((!/^\d*%?$/.test(height)) && (height != 'auto') && (height != '100%') && (height != '')) {
 						alert(self.lang('invalidHeight'));
 						heightBox[0].focus();
 						return;
@@ -155,9 +162,12 @@ KindEditor.plugin('image', function(K) {
 		var urlBox = K('[name="url"]', div),
 			localUrlBox = K('[name="localUrl"]', div),
 			viewServerBtn = K('[name="viewServer"]', div),
+			selectImageBtn = K('[name="selectImage"]', div),
 			widthBox = K('.tab1 [name="width"]', div),
 			heightBox = K('.tab1 [name="height"]', div),
 			refreshBtn = K('.ke-refresh-btn', div),
+			maxWidthBtn = K('.ke-max-width-btn', div),
+			autoSizeBtn = K('.ke-auto-size-btn', div),
 			titleBox = K('.tab1 [name="title"]', div),
 			alignBox = K('.tab1 [name="align"]', div);
 
@@ -235,6 +245,18 @@ KindEditor.plugin('image', function(K) {
 					});
 				});
 			});
+			selectImageBtn.click(function(e) {
+				self.loadPlugin('filemanager', function() {
+					self.plugin.filemanagerDialog({
+						viewType : 'VIEW',
+						dirName : 'image',
+						clickFn : function(url, title, result) {
+							var fullUrl = result.current_url + title;
+							self.exec('insertimage', fullUrl);
+						}
+					});
+				});
+			});
 		} else {
 			viewServerBtn.hide();
 		}
@@ -244,6 +266,10 @@ KindEditor.plugin('image', function(K) {
 			heightBox.val(height);
 			originalWidth = width;
 			originalHeight = height;
+		}
+		function diySize(width, height) {
+			widthBox.val(width);
+			heightBox.val(height);
 		}
 		refreshBtn.click(function(e) {
 			var tempImg = K('<img src="' + urlBox.val() + '" />', document).css({
@@ -258,14 +284,48 @@ KindEditor.plugin('image', function(K) {
 			});
 			K(document.body).append(tempImg);
 		});
+		maxWidthBtn.click(function(e) {
+			var tempImg = K('<img src="' + urlBox.val() + '" />', document).css({
+				position : 'absolute',
+				visibility : 'hidden',
+				top : 0,
+				left : '-1000px'
+			});
+			tempImg.bind('load', function() {
+				diySize('100%', '');
+				tempImg.remove();
+			});
+			K(document.body).append(tempImg);
+		});
+		autoSizeBtn.click(function(e) {
+			var tempImg = K('<img src="' + urlBox.val() + '" />', document).css({
+				position : 'absolute',
+				visibility : 'hidden',
+				top : 0,
+				left : '-1000px'
+			});
+			tempImg.bind('load', function() {
+				diySize('', '');
+				tempImg.remove();
+			});
+			K(document.body).append(tempImg);
+		});
 		widthBox.change(function(e) {
-			if (originalWidth > 0) {
-				heightBox.val(Math.round(originalHeight / originalWidth * parseInt(this.value, 10)));
+			var t_width = widthBox.val();
+			if (t_width > 0 && originalWidth > 0 && originalHeight > 0) {
+				var t_height = heightBox.val();
+				if (t_height != 'auto' && t_height != '100%') {
+                    heightBox.val(Math.round(originalHeight / originalWidth * parseInt(this.value, 10)));
+				}
 			}
 		});
 		heightBox.change(function(e) {
-			if (originalHeight > 0) {
-				widthBox.val(Math.round(originalWidth / originalHeight * parseInt(this.value, 10)));
+			var t_height = heightBox.val();
+			if (t_height > 0 && originalHeight > 0) {
+				var t_width = widthBox.val();
+				if (t_width != 'auto' && t_width != '100%') {
+                    widthBox.val(Math.round(originalWidth / originalHeight * parseInt(this.value, 10)));
+				}
 			}
 		});
 		urlBox.val(options.imageUrl);
@@ -288,8 +348,10 @@ KindEditor.plugin('image', function(K) {
 			var img = self.plugin.getSelectedImage();
 			self.plugin.imageDialog({
 				imageUrl : img ? img.attr('data-ke-src') : 'http://',
-				imageWidth : img ? img.width() : '',
-				imageHeight : img ? img.height() : '',
+                imageWidth : img ? img.attr('width') : '',
+                imageHeight : img ? img.attr('height') : '',
+                // imageWidth : img ? img.width() : '',
+                // imageHeight : img ? img.height() : '',
 				imageTitle : img ? img.attr('title') : '',
 				imageAlign : img ? img.attr('align') : '',
 				showRemote : allowImageRemote,
@@ -299,8 +361,10 @@ KindEditor.plugin('image', function(K) {
 					if (img) {
 						img.attr('src', url);
 						img.attr('data-ke-src', url);
-						img.attr('width', width);
-						img.attr('height', height);
+                        if (width == '') img.removeAttr('width');
+                        else img.attr('width', width);
+                        if (height == '') img.removeAttr('height');
+                        else img.attr('height', height);
 						img.attr('title', title);
 						img.attr('align', align);
 						img.attr('alt', title);
